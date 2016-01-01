@@ -4,8 +4,8 @@
 // Date: 5-Aug-2013
 //
 
-#ifndef GWTT_H
-#define GWTT_H
+#ifndef GWTTEMPL_H
+#define GWTTEMPL_H
 
 
 #include <windows.h>
@@ -52,7 +52,10 @@ protected:\
 void theClass::OnCommand(UINT nID, UINT nCode, HWND hwndCtl)\
 {
 
-#define ON_COMMAND_MAP(id, code, fn)\
+#define ON_COMMAND_MAP(id, fn)\
+  if(id == nID){ fn(); return; }
+
+#define ON_CONTROL_MAP(id, code, fn)\
   if(id == nID && code == nCode){ fn(); return; }
 
 #define END_COMMAND_MAP(theClass, baseClass)\
@@ -79,7 +82,7 @@ protected:
   static  LRESULT WINAPI StaticWndProc(HWND, UINT, WPARAM, LPARAM);
   virtual LRESULT WndProc(UINT, WPARAM, LPARAM);
   virtual BOOL    RegisterWnd(HINSTANCE){ return FALSE; }
-  virtual int     PreCreateWindow(LPCREATESTRUCT lpcs){ return 0; }
+  virtual int     PreCreateWindow(LPCREATESTRUCT lpcs){ return 1; }
   virtual LRESULT WindowProc(UINT message, WPARAM wParam, LPARAM lParam) 
   {
     if (m_lpfnWndProc)
@@ -106,6 +109,8 @@ public:
   HWND     Attach(HWND hwnd);
   HWND     Detach();
   HWND     SetFocus(){ return ::SetFocus(m_hwnd); }
+  HMENU    GetMenu() { return ::GetMenu(m_hwnd); }
+  BOOL     DrawMenuBar(){ return ::DrawMenuBar(m_hwnd); }
 
   // Win32 functions
   LRESULT  DefWndProc(UINT message, WPARAM wParam, LPARAM lParam)
@@ -139,12 +144,7 @@ public:
 
 protected:
   // window messages
-  virtual int     OnCreate(LPCREATESTRUCT lpcs)
-  {
-    if (PreCreateWindow(lpcs) != 0)
-      return 0;
-    return 0; 
-  }
+    virtual int     OnCreate(LPCREATESTRUCT lpcs){ return 1; }
   virtual int     OnInitDialog(){ return 1; }
   virtual void    OnDestroy(){}
   virtual void    OnPaint(HDC hdc){}
@@ -341,7 +341,13 @@ template <class T>
 LRESULT TWindow<T>::WndProc(UINT message, WPARAM wParam, LPARAM lParam)
 {
   switch(message){
-  case WM_CREATE: return OnCreate((LPCREATESTRUCT)lParam);
+  case WM_CREATE: 
+  {
+      LPCREATESTRUCT lpcs = (LPCREATESTRUCT)lParam;
+      if (PreCreateWindow(lpcs) != 1)
+          return 0;
+      return OnCreate(lpcs);
+  }
   case WM_CLOSE:
     {
       int ret = OnClose();
@@ -3169,4 +3175,4 @@ void TGenApp<TWnd>::MainLoop()
 
 
 
-#endif // GWT_H
+#endif // GWTTEMPL_H

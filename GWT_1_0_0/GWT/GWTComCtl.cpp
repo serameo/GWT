@@ -16,7 +16,7 @@ CommonControl::CommonControl(DWORD dwICC)
 
 BOOL CommonControl::Create(LPCTSTR lpWindowName,
                          DWORD dwStyle, int x, int y, int width, int height,
-                         Window *pParent, UINT nID,//HWND hwndParent, UINT nID,
+                         GWTWindow *pParent, UINT nID,//HWND hwndParent, UINT nID,
                          HINSTANCE hInst)
 {
   return CommonControl::CreateEx(0, lpWindowName,
@@ -27,7 +27,7 @@ BOOL CommonControl::Create(LPCTSTR lpWindowName,
 BOOL CommonControl::CreateEx(DWORD dwExStyle,
                            LPCTSTR lpWindowName,
                            DWORD dwStyle, int x, int y, int width, int height,
-                           Window *pParent, UINT nID,//HWND hwndParent, UINT nID,
+                           GWTWindow *pParent, UINT nID,//HWND hwndParent, UINT nID,
                            HINSTANCE hInst)
 {
   if(!InitControl()) return FALSE;
@@ -47,8 +47,10 @@ BOOL CommonControl::CreateEx(DWORD dwExStyle,
   WNDPROC wndproc = (WNDPROC)GetWindowLong(hwnd, GWL_WNDPROC);
   m_lpfnWndProc   = wndproc;
 
-  SetWindowLong(hwnd, GWL_WNDPROC,  (LONG)WindowImpl::StaticWndProc);
+  SetWindowLong(hwnd, GWL_WNDPROC,  (LONG)GWTWindowImpl::StaticWndProc);
   SetWindowLong(hwnd, GWL_USERDATA, (LONG)this);
+
+    m_pParentWnd = pParent;
 
   return TRUE;
 }

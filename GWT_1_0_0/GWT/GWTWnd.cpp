@@ -12,11 +12,11 @@ using namespace GWT;
 using namespace GWT::Windows;
 using namespace std;
 
-typedef std::map<HWND, Window*>     NativeWindowMap;
+typedef std::map<HWND, GWTWindow*>     NativeWindowMap;
 typedef NativeWindowMap::iterator   NativeWindowMapIterator;
 NativeWindowMap *SharedNativeWindowMap = NULL;
 
-typedef std::vector<Window*>             ModalessDialogVector;
+typedef std::vector<GWTWindow*>             ModalessDialogVector;
 typedef ModalessDialogVector::iterator   ModalessDialogVectorIterator;
 ModalessDialogVector *SharedModalessDialogs = NULL;
 
@@ -37,7 +37,7 @@ BOOL GWT::Windows::AreDialogMessages(LPMSG lpMsg)
   return FALSE;
 }
 
-BOOL WindowImpl::RegisterWnd(HINSTANCE hInstance)
+BOOL GWTWindowImpl::RegisterWnd(HINSTANCE hInstance)
 {
   WNDCLASSEX wc;
   wc.cbClsExtra = 0;
@@ -48,21 +48,21 @@ BOOL WindowImpl::RegisterWnd(HINSTANCE hInstance)
   wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
   wc.hIconSm = wc.hIcon;
   wc.hInstance = hInstance;
-  wc.lpfnWndProc = (WNDPROC)WindowImpl::StaticWndProc;
+  wc.lpfnWndProc = (WNDPROC)GWTWindowImpl::StaticWndProc;
   wc.lpszClassName = GetClassName();
   wc.lpszMenuName = NULL;
   wc.style = CS_HREDRAW|CS_VREDRAW|CS_OWNDC;
   return RegisterClassEx(&wc);
 }
 
-BOOL CALLBACK WindowImpl::StaticDlgProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+BOOL CALLBACK GWTWindowImpl::StaticDlgProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-  WindowImpl *pDlg = (WindowImpl*)GetWindowLong(hwnd, GWL_USERDATA);
+  GWTWindowImpl *pDlg = (GWTWindowImpl*)GetWindowLong(hwnd, GWL_USERDATA);
   switch (message)
   {
   case WM_INITDIALOG:
     {
-      pDlg = (WindowImpl*)lParam;
+      pDlg = (GWTWindowImpl*)lParam;
       pDlg->m_hwnd = hwnd;
       SetWindowLong(hwnd, GWL_USERDATA, (LONG)lParam);
     }
@@ -76,7 +76,49 @@ BOOL CALLBACK WindowImpl::StaticDlgProc(HWND hwnd, UINT message, WPARAM wParam, 
   return FALSE;
 }
 
-Window *Window::FromHandle(HWND hwnd)
+LRESULT CALLBACK GWTWindowImpl::StaticMDIChildProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+  GWTWindowImpl *pMDIChild = (GWTWindowImpl*)GetWindowLongPtr(hwnd, GWL_USERDATA);
+  switch (message)
+  {
+  case WM_INITDIALOG:
+    {
+      pMDIChild = (GWTWindowImpl*)lParam;
+      pMDIChild->m_hwnd = hwnd;
+      SetWindowLongPtr(hwnd, GWL_USERDATA, (LONG)lParam);
+    }
+    break;
+  }
+  if (pMDIChild)
+  {
+    return pMDIChild->WndProc(message, wParam, lParam);
+  }
+  return DefMDIChildProc(hwnd, message, wParam, lParam);
+}
+
+LRESULT CALLBACK GWTWindowImpl::StaticMDIFrameProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+  GWTWindowImpl *pMDIFrame = (GWTWindowImpl*)GetWindowLongPtr(hwnd, GWL_USERDATA);
+  switch (message)
+  {
+  case WM_CREATE:
+    {
+        LPCREATESTRUCT lpcs = (LPCREATESTRUCT)lParam;
+      pMDIFrame = (GWTWindowImpl*)lpcs->lpCreateParams;
+      pMDIFrame->m_hwnd = hwnd;
+      SetWindowLongPtr(hwnd, GWL_USERDATA, (LONG)pMDIFrame);
+    }
+    break;
+  }
+  if (pMDIFrame)
+  {
+    return pMDIFrame->WndProc(message, wParam, lParam);
+  }
+  return DefFrameProc(hwnd, GetWindow(hwnd, GW_CHILD), message, wParam, lParam);
+}
+
+
+GWTWindow *GWTWindow::FromHandle(HWND hwnd)
 {
   if (!SharedNativeWindowMap)
   {
@@ -93,45 +135,71 @@ Window *Window::FromHandle(HWND hwnd)
     }
     return (*it).second;
   }
-  Window *pWnd = new Window();
+  GWTWindow *pWnd = new GWTWindow();
   pWnd->Attach(hwnd);
   (*SharedNativeWindowMap)[hwnd] = pWnd;
   return pWnd;
 }
 
-Dialog::Dialog(Window *pParent, UINT nIDTemplate)
+BOOL GWTWindow::Create(LPCTSTR lpWindowName,
+                DWORD dwStyle, int x, int y, int width, int height,
+                GWTWindow *pParent, HMENU hMenu,
+                HINSTANCE hInst)
+{
+    return CreateEx(0, lpWindowName, dwStyle,
+        x, y, width, height,
+        pParent, hMenu, hInst);
+}
+BOOL GWTWindow::CreateEx(DWORD dwExStyle,
+                LPCTSTR lpWindowName,
+                DWORD dwStyle, int x, int y, int width, int height,
+                GWTWindow *pParent, HMENU hMenu,
+                HINSTANCE hInst)
+{
+    m_pParentWnd = pParent;
+    return GWTWindowImpl::CreateEx(dwExStyle, lpWindowName, dwStyle,
+        x, y, width, height,
+        (pParent ? pParent->GetHWND() : NULL), hMenu, hInst);
+}
+
+
+GWTDialog::GWTDialog(GWTWindow *pParent, UINT nIDTemplate)
   : m_pParentWnd(pParent)
   , m_pszTemplate(NULL)
   , m_nIDTemplate(nIDTemplate)
 {
 }
 
-Dialog::Dialog(Window *pParent, LPCTSTR lpszTemplate)
+GWTDialog::GWTDialog(GWTWindow *pParent, LPCTSTR lpszTemplate)
   : m_pParentWnd(pParent)
   , m_pszTemplate(lpszTemplate)
   , m_nIDTemplate(0)
 {
 }
 
-Dialog::~Dialog()
+GWTDialog::~GWTDialog()
 {
-  std::map<HWND, GWT::Windows::Window*>::iterator it = m_wndMap.begin();
+  std::map<HWND, GWT::Windows::GWTWindow*>::iterator it = m_wndMap.begin();
   for (; it != m_wndMap.end(); ++it)
   {
     (*it).second->Detach();
+    delete (*it).second;
   }
 
-  ModalessDialogVectorIterator it2 = std::find(SharedModalessDialogs->begin(),
-                                               SharedModalessDialogs->end(),
-                                               this);
-  if (it2 != SharedModalessDialogs->end())
+  if (SharedModalessDialogs)
   {
-    SharedModalessDialogs->erase(it2);
-    m_hwnd = NULL;
+      ModalessDialogVectorIterator it2 = std::find(SharedModalessDialogs->begin(),
+                                                   SharedModalessDialogs->end(),
+                                                   this);
+      if (it2 != SharedModalessDialogs->end())
+      {
+        SharedModalessDialogs->erase(it2);
+        m_hwnd = NULL;
+      }
   }
 }
 
-BOOL Dialog::DoModaless(HINSTANCE hInstance)
+BOOL GWTDialog::DoModaless(HINSTANCE hInstance)
 {
   if (m_hwnd && ::IsWindow(m_hwnd))
   {
@@ -148,7 +216,7 @@ BOOL Dialog::DoModaless(HINSTANCE hInstance)
   m_hwnd = CreateDialogParam(hInstance, 
     (m_nIDTemplate ? MAKEINTRESOURCE(m_nIDTemplate) : m_pszTemplate),
     m_pParentWnd->GetHWND(),
-    (DLGPROC)WindowImpl::StaticDlgProc, (LPARAM)this);
+    (DLGPROC)GWTWindowImpl::StaticDlgProc, (LPARAM)this);
   if (!m_hwnd)
     return FALSE;
 
@@ -166,7 +234,7 @@ BOOL Dialog::DoModaless(HINSTANCE hInstance)
   return TRUE;
 }
 
-UINT Dialog::DoModal(HINSTANCE hInstance)
+UINT GWTDialog::DoModal(HINSTANCE hInstance)
 {
   if (!hInstance)
   {
@@ -176,11 +244,11 @@ UINT Dialog::DoModal(HINSTANCE hInstance)
   UINT nID = DialogBoxParam(hInstance, 
     (m_nIDTemplate ? MAKEINTRESOURCE(m_nIDTemplate) : m_pszTemplate),
     m_pParentWnd->GetHWND(),
-    (DLGPROC)WindowImpl::StaticDlgProc, (LPARAM)this);
+    (DLGPROC)GWTWindowImpl::StaticDlgProc, (LPARAM)this);
   return (nID);
 }
 
-LRESULT Dialog::WndProc(UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT GWTDialog::WndProc(UINT message, WPARAM wParam, LPARAM lParam)
 {
   switch (message)
   {
@@ -244,7 +312,7 @@ LRESULT Dialog::WndProc(UINT message, WPARAM wParam, LPARAM lParam)
   case WM_MOVE:
   case WM_QUERYOPEN:
   case WM_ACTIVATE:
-    Window::WndProc(message, wParam, lParam);
+    GWTWindow::WndProc(message, wParam, lParam);
     return 1;
 
   default: return 0;
@@ -252,7 +320,7 @@ LRESULT Dialog::WndProc(UINT message, WPARAM wParam, LPARAM lParam)
   return 0;
 }
 
-Window *Dialog::GetDlgItem(UINT nID)
+GWTWindow *GWTDialog::GetDlgItem(UINT nID)
 {
 //#pragma message("Dialog::GetDlgItem - [NOT IMPLEMENTED SUCCESSFULLY]")
 
@@ -260,12 +328,12 @@ Window *Dialog::GetDlgItem(UINT nID)
   if (!hwnd)
     return NULL;
 
-  Window *pWnd = (Window*)GetWindowLong(hwnd, GWL_USERDATA);
+  GWTWindow *pWnd = (GWTWindow*)GetWindowLong(hwnd, GWL_USERDATA);
   
   return pWnd;
 }
 
-GWTString Dialog::GetDlgItemText(UINT nID)
+GWTString GWTDialog::GetDlgItemText(UINT nID)
 {
   TCHAR szText[MAX_PATH];
   UINT nLen = GetDlgItemText(nID, szText, MAX_PATH);
@@ -273,26 +341,26 @@ GWTString Dialog::GetDlgItemText(UINT nID)
   return sText;
 }
 
-UINT Dialog::GetDlgItemText(UINT nID, LPTSTR lpszText, int cchMax)
+UINT GWTDialog::GetDlgItemText(UINT nID, LPTSTR lpszText, int cchMax)
 {
   TCHAR szText[MAX_PATH];
   return ::GetDlgItemText(m_hwnd, nID, szText, MAX_PATH);
 }
 
-BOOL Dialog::SetDlgItemText(UINT nID, LPCTSTR lpszText)
+BOOL GWTDialog::SetDlgItemText(UINT nID, LPCTSTR lpszText)
 {
   return ::SetDlgItemText(m_hwnd, nID, lpszText);
 }
 
-int Dialog::OnInitDialog()
+int GWTDialog::OnInitDialog()
 {
   HWND hwndChild = GetWindow(m_hwnd, GW_CHILD);
   for(; hwndChild != NULL; hwndChild = GetWindow(hwndChild, GW_HWNDNEXT))
   {
-    //UINT nID = GetWindowLong(hwndChild, GWL_ID);
-    Window *pWnd = new Window();
+    GWTWindow *pWnd = new GWTWindow();
     pWnd->Attach(hwndChild);
     SetWindowLong(hwndChild, GWL_USERDATA, (LONG)pWnd);
+    m_wndMap[hwndChild] = pWnd;
   }
   return 1;
 }
@@ -324,10 +392,202 @@ int GWTApplication::Run()
   {
     if (!AreDialogMessages(&msg))
     {
-      TranslateMessage(&msg);
-      DispatchMessage(&msg);
+        if (m_pMainWnd && !m_pMainWnd->IsTranslateAccelerator(&msg))
+        {
+          TranslateMessage(&msg);
+          DispatchMessage(&msg);
+        }
     }
   }
   ExitInstance(0);
   return 0;
+}
+
+BOOL GWTMDIFrameWindow::RegisterWnd(HINSTANCE hInstance)
+{
+  WNDCLASSEX wc;
+  wc.cbClsExtra = 0;
+  wc.cbSize = sizeof(wc);
+  wc.cbWndExtra = 0;
+  wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+  wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+  wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+  wc.hIconSm = wc.hIcon;
+  wc.hInstance = hInstance;
+  wc.lpfnWndProc = (WNDPROC)GWTWindowImpl::StaticMDIFrameProc;
+  //wc.lpfnWndProc = (WNDPROC)GWTWindowImpl::StaticWndProc;
+  wc.lpszClassName = GetClassName();
+  wc.lpszMenuName = NULL;//(m_nIDResource != 0 ? MAKEINTRESOURCE(m_nIDResource) : NULL);
+  wc.style = CS_HREDRAW|CS_VREDRAW|CS_OWNDC;
+  return RegisterClassEx(&wc);
+}
+
+GWTFrameWindow::~GWTFrameWindow()
+{
+    DestroyMenu(m_hMenu);
+}
+
+int GWTFrameWindow::PreCreateWindow(LPCREATESTRUCT lpcs)
+{
+    if (m_nIDResource != 0)
+    {
+        m_hAccel = LoadAccelerators(lpcs->hInstance, MAKEINTRESOURCE(m_nIDResource));
+        m_hMenu = LoadMenu(lpcs->hInstance, MAKEINTRESOURCE(m_nIDResource));
+        //lpcs->hMenu = m_hMenu;
+    }
+    return 1;
+}
+
+BOOL GWTFrameWindow::IsTranslateAccelerator(LPMSG lpMsg)
+{
+    if (m_hAccel)
+    {
+        return ::TranslateAccelerator(m_hwnd, m_hAccel, lpMsg);
+    }
+    return FALSE;
+}
+
+int GWTMDIFrameWindow::OnCreate(LPCREATESTRUCT lpcs)
+{
+    if (GWTFrameWindow::OnCreate(lpcs) != 1)
+        return 0;
+
+    CLIENTCREATESTRUCT ccs;  
+    // Retrieve the handle to the window menu and assign the 
+    // first child window identifier.
+    SetMenu(m_hwnd, m_hMenu);
+    HMENU hMenu = GetMenu();
+    GWTASSERT(m_hMenu == hMenu);
+    DrawMenuBar();
+
+    ccs.hWindowMenu = GetSubMenu(hMenu, m_nIDWindowMenu);
+    ccs.idFirstChild = m_nIDFirstChild;
+
+    HWND hwndMDIClient = CreateWindowEx(0, m_pMDIClient->GetClassName(), (LPCTSTR) NULL, 
+            WS_CHILD | WS_CLIPCHILDREN | WS_VSCROLL | WS_HSCROLL, 
+            0, 0, 0, 0, m_hwnd, (HMENU)GWTMDIClient::ID, 
+            lpcs->hInstance, (LPSTR) &ccs);
+    if (hwndMDIClient)
+    {
+        SetWindowLongPtr(hwndMDIClient, GWL_USERDATA, (LONG)(m_pMDIClient));
+        m_pMDIClient->Attach(hwndMDIClient);
+        m_pMDIClient->ShowWindow(SW_SHOW);
+        return 1;
+    }
+
+    return 0;
+}
+
+GWTMDIChildWindow::GWTMDIChildWindow(GWTMDIFrameWindow *pMDIFrameWindow, UINT nIDResource, UINT nWindowMenuPos)
+    : GWTFrameWindow(nIDResource)
+    , m_pMDIFrameWindow(pMDIFrameWindow)
+    , m_nWindowMenuPos(nWindowMenuPos)
+{
+    HINSTANCE hInstance = (HINSTANCE)::GetModuleHandle(NULL);
+    RegisterWnd(hInstance);
+}
+
+BOOL GWTMDIChildWindow::RegisterWnd(HINSTANCE hInstance)
+{
+  WNDCLASSEX wc;
+  wc.cbClsExtra = 0;
+  wc.cbSize = sizeof(wc);
+  wc.cbWndExtra = 0;
+  wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+  wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+  wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+  wc.hIconSm = wc.hIcon;
+  wc.hInstance = hInstance;
+  wc.lpfnWndProc = (WNDPROC)GWTWindowImpl::StaticMDIChildProc;
+  wc.lpszClassName = GetClassName();
+  wc.lpszMenuName = NULL;(m_nIDResource != 0 ? MAKEINTRESOURCE(m_nIDResource) : NULL);
+  wc.style = CS_HREDRAW|CS_VREDRAW|CS_OWNDC;
+  return RegisterClassEx(&wc);
+}
+
+
+BOOL GWTMDIFrameWindow::CreateMDIWindow(GWTMDIChildWindow **ppChild, 
+    LPCTSTR lpWindowName, DWORD dwStyle,
+    int x, int y, int w, int h, 
+    HINSTANCE hInstance)
+{
+    GWTASSERT(ppChild);
+    GWTASSERT(*ppChild);
+
+    if (!hInstance)
+        hInstance = (HINSTANCE)::GetModuleHandle(NULL);
+
+    //HWND hwndChild = ::CreateMDIWindow((*ppChild)->GetClassName(),
+    //    lpWindowName, dwStyle,
+    //    x, y, w, h,
+    //    m_pMDIClient->GetHWND(),
+    //    hInstance, NULL);
+    MDICREATESTRUCT    mdicreate ;
+    mdicreate.szClass = (*ppChild)->GetClassName();
+    mdicreate.szTitle = lpWindowName;
+    mdicreate.hOwner  = hInstance;
+    mdicreate.x       = x;
+    mdicreate.y       = y;
+    mdicreate.cx      = w;
+    mdicreate.cy      = h;
+    mdicreate.style   = 0;
+    mdicreate.lParam  = (LPARAM)(*ppChild);
+               
+    HWND hwndChild = (HWND) m_pMDIClient->SendMessage(WM_MDICREATE, 0, (LPARAM)&mdicreate) ;
+
+    if (hwndChild)
+    {
+        SetWindowLongPtr(hwndChild, GWL_USERDATA, (LONG)(*ppChild));
+        (*ppChild)->Attach(hwndChild);
+        //m_pMDIClient->SubclassWnd(hwndChild);
+        m_pMDIClient->RegisterChild(hwndChild, (*ppChild));
+        return TRUE;
+    }
+    //delete *ppChild;
+    return FALSE;
+}
+
+GWTMDIChildWindow *GWTMDIFrameWindow::GWTMDIClient::MDIGetActive()
+{
+    HWND hwndActive = (HWND)SendMessage(WM_MDIACTIVATE);
+    std::map<HWND, GWTMDIChildWindow*>::iterator it = m_children.find(hwndActive);
+    if (it == m_children.end())
+        return NULL;
+    return (*it).second;
+}
+
+void GWTMDIFrameWindow::GWTMDIClient::RegisterChild(HWND hwndChild, GWTMDIChildWindow* pChild)
+{
+    m_children[hwndChild] = pChild;
+}
+
+LRESULT GWTMDIChildWindow::WindowProc(UINT message, WPARAM wParam, LPARAM lParam)
+{
+    switch (message)
+    {
+    case WM_MDIACTIVATE:
+        OnMDIActivate();
+        return 0;
+    }
+    return DefMDIChildProc(m_hwnd, message, wParam, lParam);
+}
+
+void GWTMDIChildWindow::OnMDIActivate()
+{
+    GetParent()->SendMessageW(WM_MDISETMENU, (WPARAM)GetMenu(), (LPARAM)GetSubWindowMenu());
+}
+
+LRESULT GWTMDIFrameWindow::WindowProc(UINT message, WPARAM wParam, LPARAM lParam)
+{ 
+    switch (message)
+    {
+    case WM_COMMAND:
+        GWTMDIChildWindow *pChild = m_pMDIClient->MDIGetActive();
+        if (pChild)
+        {
+            pChild->SendMessage(WM_COMMAND, wParam, lParam);
+        }
+        break;
+    }
+    return DefFrameProc(m_hwnd, m_pMDIClient->GetHWND(), message, wParam, lParam); 
 }

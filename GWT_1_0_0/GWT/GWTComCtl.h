@@ -20,7 +20,7 @@ namespace GWT
 
   namespace CommonControls
   {
-    class CommonControl : public Window 
+    class CommonControl : public GWTWindow 
     {
 
     private:
@@ -40,12 +40,12 @@ namespace GWT
       virtual LPCTSTR GetClassName() = 0;
       BOOL Create(LPCTSTR lpWindowName,
                   DWORD dwStyle, int x, int y, int width, int height,
-                  Window *pParent, UINT nID,//HWND hwndParent, UINT nID,
+                  GWTWindow *pParent, UINT nID,//HWND hwndParent, UINT nID,
                   HINSTANCE hInst);
       BOOL CreateEx(DWORD dwExStyle,
                     LPCTSTR lpWindowName,
                     DWORD dwStyle, int x, int y, int width, int height,
-                    Window *pParent, UINT nID,//HWND hwndParent, UINT nID,
+                    GWTWindow *pParent, UINT nID,//HWND hwndParent, UINT nID,
                     HINSTANCE hInst);
     };
 

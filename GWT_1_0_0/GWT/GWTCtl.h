@@ -20,18 +20,18 @@ namespace GWT
 
   namespace Controls
   {
-    class Control : public Window
+    class Control : public GWTWindow
     {
     public:
       virtual LPCTSTR GetClassName() = 0;
       BOOL     Create(LPCTSTR lpWindowName,
                       DWORD dwStyle, int x, int y, int width, int height,
-                      Window *pParent, UINT nID,//HWND hwndParent, UINT nID,
+                      GWTWindow *pParent, UINT nID,//HWND hwndParent, UINT nID,
                       HINSTANCE hInst = NULL);
       BOOL     CreateEx(DWORD dwExStyle,
                         LPCTSTR lpWindowName,
                         DWORD dwStyle, int x, int y, int width, int height,
-                        Window *pParent, UINT nID,//HWND hwndParent, UINT nID,
+                        GWTWindow *pParent, UINT nID,//HWND hwndParent, UINT nID,
                         HINSTANCE hInst = NULL);
       // this is not implemented GetClassName()
       // because we need it to be a abstract class
@@ -198,7 +198,7 @@ namespace GWT
       }
 
       void DrawInsert(int nItem)
-      { return ::DrawInsert(GetParent(m_hwnd), m_hwnd, nItem); }
+      { return ::DrawInsert(GetParent()->GetHWND(), m_hwnd, nItem); }
       DWORD GetListBoxInfo()
       { return ::GetListBoxInfo(m_hwnd); }
       int LBItemFromPt(POINT pt, BOOL bAutoScroll)

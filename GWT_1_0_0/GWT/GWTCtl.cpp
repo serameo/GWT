@@ -10,7 +10,7 @@ using namespace GWT::Controls;
 
 BOOL Control::Create(LPCTSTR lpWindowName,
                          DWORD dwStyle, int x, int y, int width, int height,
-                         Window *pParent, UINT nID,//HWND hwndParent, UINT nID,
+                         GWTWindow *pParent, UINT nID,//HWND hwndParent, UINT nID,
                          HINSTANCE hInst)
 {
   return CreateEx(0, lpWindowName, dwStyle, 
@@ -21,9 +21,11 @@ BOOL Control::Create(LPCTSTR lpWindowName,
 BOOL Control::CreateEx(DWORD dwExStyle,
                            LPCTSTR lpWindowName,
                            DWORD dwStyle, int x, int y, int width, int height,
-                           Window *pParent, UINT nID, //HWND hwndParent, UINT nID,
+                           GWTWindow *pParent, UINT nID, //HWND hwndParent, UINT nID,
                            HINSTANCE hInst)
 {
+    GWTASSERT(pParent);
+
   if(m_bIsAttached){
     // do not allow create if it is still attached another window handle
     return FALSE;
@@ -39,15 +41,16 @@ BOOL Control::CreateEx(DWORD dwExStyle,
   WNDPROC wndproc = (WNDPROC)GetWindowLong(hwnd, GWL_WNDPROC);
   m_lpfnWndProc   = wndproc;
 
-  SetWindowLong(hwnd, GWL_WNDPROC,  (LONG)WindowImpl::StaticWndProc);
+  SetWindowLong(hwnd, GWL_WNDPROC,  (LONG)GWTWindowImpl::StaticWndProc);
   SetWindowLong(hwnd, GWL_USERDATA, (LONG)this);
 
+  m_pParentWnd = pParent;
   return TRUE;
 }
 
 LRESULT Control::WndProc(UINT message, WPARAM wParam, LPARAM lParam){
   if(message != WM_PAINT){
-    LRESULT res = Window::WndProc(message, wParam, lParam);
+    LRESULT res = GWTWindow::WndProc(message, wParam, lParam);
   }
   return CallWndProc(message, wParam, lParam);
 }
@@ -62,7 +65,7 @@ BOOL Animate::Create(DWORD dwStyle, HWND hwndParent, UINT nID, HINSTANCE hInst)
   WNDPROC wndproc = (WNDPROC)GetWindowLong(hwnd, GWL_WNDPROC);
   m_lpfnWndProc   = wndproc;
 
-  SetWindowLong(hwnd, GWL_WNDPROC,  (LONG)WindowImpl::StaticWndProc);
+  SetWindowLong(hwnd, GWL_WNDPROC,  (LONG)GWTWindowImpl::StaticWndProc);
   SetWindowLong(hwnd, GWL_USERDATA, (LONG)this);
 
   return TRUE;
